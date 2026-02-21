@@ -25,18 +25,10 @@ decode:
     tensor: 8
   create: true
   replicas: 1
+  # podAnnotations (k8s.v1.cni.cncf.io/networks) and nvidia.com/sriov-rdma-vf resources
+  # are injected dynamically by helmfile from DECODE_TP/PREFILL_TP env (see glm-pareto deploy)
   extraConfig:
-    hostNetwork: true
-    dnsPolicy: ClusterFirstWithHostNet
-    affinity:
-      podAntiAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-                - key: llm-d.ai/inference-serving
-                  operator: In
-                  values: ["true"]
-            topologyKey: kubernetes.io/hostname
+    hostNetwork: false  # Use SR-IOV NICs (pod network) instead of hostNetwork
   monitoring:
     podmonitor:
       enabled: true
@@ -45,9 +37,11 @@ decode:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/vcave/llm-d/llm-d-rocm:v0.4.6-debug
+      image: ghcr.io/vcave/llm-d/llm-d-rocm:v0.4.7-debug
       securityContext:
-        privileged: true
+        capabilities:
+          add:
+            - IPC_LOCK
       modelCommand: vllmServe
       args:
         - "--kv-transfer-config"
@@ -57,21 +51,15 @@ decode:
         - "--disable-uvicorn-access-log"
         - "--gpu-memory-utilization"
         - "0.95"
-        - "--block-size"
-        - "128"
       env:
         - name: UCX_TLS
           value: "self,sm,rocm,rc"
-        - name: UCX_NET_DEVICES
-          value: "mlx5_0:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_7:1,mlx5_8:1,mlx5_9:1"
         - name: UCX_IB_GID_INDEX
           value: "3"
         - name: UCX_IB_TRAFFIC_CLASS
           value: "41"
         - name: UCX_MAX_RMA_RAILS
           value: "1"
-#        - name: VLLM_ROCM_USE_AITER
-#          value: "1"
         - name: VLLM_NIXL_SIDE_CHANNEL_HOST
           valueFrom:
             fieldRef:
@@ -149,18 +137,9 @@ prefill:
     tensor: 4
   create: true
   replicas: 2
+  # podAnnotations and nvidia.com/sriov-rdma-vf injected by helmfile (PREFILL_TP)
   extraConfig:
-    hostNetwork: true
-    dnsPolicy: ClusterFirstWithHostNet
-    affinity:
-      podAntiAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-                - key: llm-d.ai/inference-serving
-                  operator: In
-                  values: ["true"]
-            topologyKey: kubernetes.io/hostname
+    hostNetwork: false  # Use SR-IOV NICs instead of hostNetwork
   monitoring:
     podmonitor:
       enabled: true
@@ -169,9 +148,11 @@ prefill:
       interval: "30s"
   containers:
     - name: "vllm"
-      image: ghcr.io/vcave/llm-d/llm-d-rocm:v0.4.6-debug
+      image: ghcr.io/vcave/llm-d/llm-d-rocm:v0.4.7-debug
       securityContext:
-        privileged: true
+        capabilities:
+          add:
+            - IPC_LOCK
       modelCommand: vllmServe
       args:
         - "--kv-transfer-config"
@@ -181,21 +162,15 @@ prefill:
         - "--disable-uvicorn-access-log"
         - "--gpu-memory-utilization"
         - "0.95"
-        - "--block-size"
-        - "128"
       env:
         - name: UCX_TLS
           value: "self,sm,rocm,rc"
-        - name: UCX_NET_DEVICES 
-          value: "mlx5_0:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_7:1,mlx5_8:1,mlx5_9:1"
         - name: UCX_IB_GID_INDEX
           value: "3"
         - name: UCX_IB_TRAFFIC_CLASS
           value: "41"
         - name: UCX_MAX_RMA_RAILS
-          value: "1"
-#        - name: VLLM_ROCM_USE_AITER
-#          value: "1"
+          value: "2"
         - name: VLLM_NIXL_SIDE_CHANNEL_HOST
           valueFrom:
             fieldRef:
