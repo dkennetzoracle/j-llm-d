@@ -28,6 +28,7 @@ decode:
   # podAnnotations (k8s.v1.cni.cncf.io/networks) and nvidia.com/sriov-rdma-vf resources
   # are injected dynamically by helmfile from DECODE_TP/PREFILL_TP env (see glm-pareto deploy)
   extraConfig:
+    priorityClassName: llm-d-high
     hostNetwork: false  # Use SR-IOV NICs (pod network) instead of hostNetwork
   monitoring:
     podmonitor:
@@ -139,6 +140,7 @@ prefill:
   replicas: 2
   # podAnnotations and nvidia.com/sriov-rdma-vf injected by helmfile (PREFILL_TP)
   extraConfig:
+    priorityClassName: llm-d-low
     hostNetwork: false  # Use SR-IOV NICs instead of hostNetwork
   monitoring:
     podmonitor:

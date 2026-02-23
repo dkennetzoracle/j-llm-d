@@ -1,0 +1,9 @@
+decode:
+  parallelism:
+    tensor: 4
+  replicas: 6
+
+prefill:
+  parallelism:
+    tensor: 2
+  replicas: 4

@@ -174,6 +174,24 @@ setup-ns CONFIG:
   kubectl -n "$NS" create secret generic hf-secret \
     --from-literal=HF_TOKEN="$HF_TOKEN" \
     --dry-run=client -o yaml | kubectl apply -f -
+  # PriorityClasses for scheduling larger-GPU roles first (cluster-scoped, idempotent)
+  kubectl apply -f - <<'EOF'
+  apiVersion: scheduling.k8s.io/v1
+  kind: PriorityClass
+  metadata:
+    name: llm-d-high
+  value: 1000
+  globalDefault: false
+  description: "Higher-priority role (more GPUs per replica)"
+  ---
+  apiVersion: scheduling.k8s.io/v1
+  kind: PriorityClass
+  metadata:
+    name: llm-d-low
+  value: 100
+  globalDefault: false
+  description: "Lower-priority role (fewer GPUs per replica)"
+  EOF
   # Poker RBAC (SA + Role + RoleBinding, skip the Pod)
   kubectl -n "$NS" apply -f - <<'EOF'
   apiVersion: v1
@@ -243,6 +261,15 @@ deploy CONFIG:
               args.extend(extra_args)
               containers[0]['args'] = args
               overlay.setdefault(role, {})['containers'] = containers
+  # Assign priorityClassName: role with more GPUs gets llm-d-high
+  decode_tp = overlay.get('decode', {}).get('parallelism', {}).get('tensor', 8)
+  prefill_tp = overlay.get('prefill', {}).get('parallelism', {}).get('tensor', 4)
+  if decode_tp >= prefill_tp:
+      d_prio, p_prio = 'llm-d-high', 'llm-d-low'
+  else:
+      d_prio, p_prio = 'llm-d-low', 'llm-d-high'
+  for role, prio in [('decode', d_prio), ('prefill', p_prio)]:
+      overlay.setdefault(role, {}).setdefault('extraConfig', {})['priorityClassName'] = prio
   with open('$MS_VALUES', 'w') as f:
       yaml.dump(overlay, f, default_flow_style=False)
   "
